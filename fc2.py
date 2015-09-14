@@ -91,3 +91,23 @@ class Camera(object):
         dll.fc2GetCameraFromIndex(c, index, byref(self.guid))
         dll.fc2Connect(c, byref(self.guid))
         dll.fc2GetCameraInfo(c, byref(self.cameraInfo))
+
+
+    def grabImageToDisk(self, outFileName='fc2Test.png'):
+        c = self.context
+        imgRaw = Fc2Image()
+        imgConv = Fc2Image()
+
+        dll.fc2CreateImage(byref(imgRaw))
+        dll.fc2CreateImage(byref(imgConv))
+        dll.fc2StartCapture(c)
+        dll.fc2RetrieveBuffer(c, byref(imgRaw))
+        dll.fc2StopCapture(c)
+        dll.fc2ConvertImageTo(0x80000008,
+                              byref(imgRaw),
+                              byref(imgConv))
+        dll.fc2SaveImage(byref(imgConv),
+                         outFileName,
+                         -1)
+        dll.fc2DestroyImage(byref(imgRaw))
+        dll.fc2DestroyImage(byref(imgConv))
