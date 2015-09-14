@@ -1,4 +1,5 @@
 import ctypes
+import numpy as np
 from ctypes import byref
 MAX_STRING_LENGTH = 512
 
@@ -66,7 +67,7 @@ class Fc2Image(ctypes.Structure):
     _fields_ = [('rows', ctypes.c_uint),
                 ('cols', ctypes.c_uint),
                 ('stride', ctypes.c_uint),
-                ('pData', ctypes.c_char_p),
+                ('pData', ctypes.c_void_p), # Cast to long on assignment.
                 ('dataSize', ctypes.c_uint),
                 ('receivedDataSize', ctypes.c_uint),
                 ('fc2PixelFormat', ctypes.c_uint),
@@ -111,3 +112,19 @@ class Camera(object):
                          -1)
         dll.fc2DestroyImage(byref(imgRaw))
         dll.fc2DestroyImage(byref(imgConv))
+
+
+    def grabImageToBuffer(self):
+        c = self.context
+        imgRaw = Fc2Image()
+        dll.fc2CreateImage(byref(imgRaw))
+        dll.fc2StartCapture(c)
+        dll.fc2RetrieveBuffer(c, byref(imgRaw))
+        dll.fc2StopCapture(c)
+
+        # When the DLL assignes to imgRaw.pData, it becomes a long in python.
+        # Recast to a pointer to a byte array.
+        p = ctypes.cast(imgRaw.pData, ctypes.POINTER(ctypes.c_ubyte))
+        data = np.fromiter(p, np.uint8, imgRaw.cols * imgRaw.rows)
+        self.lastImage = data.reshape((imgRaw.rows, imgRaw.cols))
+        dll.fc2DestroyImage(byref(imgRaw))
