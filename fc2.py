@@ -1,6 +1,16 @@
 import ctypes
+import decimal
 import numpy as np
+import Pyro4
+import signal
+import sys
+import threading
+import time
 from ctypes import byref
+
+Pyro4.config.SERIALIZER = 'pickle'
+Pyro4.config.SERIALIZERS_ACCEPTED.add('pickle')
+
 MAX_STRING_LENGTH = 512
 
 dll = ctypes.WinDLL('FlyCapture2_C_v100.dll')
@@ -80,6 +90,8 @@ class Camera(object):
         self.context = ctypes.c_voidp()
         self.guid = ctypes.c_uint()
         self.cameraInfo = Fc2CameraInfo()
+        self.connected = False
+        self.client = None
 
 
     def connect(self, index=0):
@@ -92,6 +104,12 @@ class Camera(object):
         dll.fc2GetCameraFromIndex(c, index, byref(self.guid))
         dll.fc2Connect(c, byref(self.guid))
         dll.fc2GetCameraInfo(c, byref(self.cameraInfo))
+        self.connected = True
+
+
+    def enableCamera(self):
+        if not self.connected: self.connect()
+        return True
 
 
     def grabImageToDisk(self, outFileName='fc2Test.png'):
@@ -128,3 +146,78 @@ class Camera(object):
         data = np.fromiter(p, np.uint8, imgRaw.cols * imgRaw.rows)
         self.lastImage = data.reshape((imgRaw.rows, imgRaw.cols))
         dll.fc2DestroyImage(byref(imgRaw))
+
+
+    def getImageSize(self):
+        width, height = self.cameraInfo.sensorResolution.split('x')
+        return (int(width), int(height))
+
+
+    def getImageSizes(self):
+        return [self.cameraInfo.sensorResolution]
+
+
+    def getTimeBetweenExposures(self, isExact=False):
+        if isExact:
+            return decimal.Decimal(0.1)
+        else:
+            return 0.1
+
+
+    def getExposureTime(self, isExact=False):
+        if isExact:
+            return decimal.Decimal(0.1)
+        else:
+            return 0.1
+
+
+    def setExposureTime(self, time):
+        pass
+
+
+    def setImageSize(self, size):
+        pass
+
+
+    def softTrigger(self):
+        if self.client is not None:
+            self.grabImageToBuffer()
+            self.client.receiveData('new image',
+                                     self.lastImage,
+                                     time.time())
+
+
+    def receiveClient(self, uri):
+        """Handle connection request from cockpit client."""
+        if uri is None:
+            self.client = None
+        else:
+            self.client = Pyro4.Proxy(uri)
+
+
+def main():
+    print sys.argv
+    host = 'localhost' or sys.argv[1]
+    port = 8000 or int(sys.argv[2])
+    daemon = Pyro4.Daemon(port=port, host=host)
+
+    # Start the daemon in a new thread so we can exit on ctrl-c
+    daemonThread = threading.Thread(
+        target=Pyro4.Daemon.serveSimple,
+        args = ({Camera(): 'pyroCam'},),
+        kwargs = {'daemon': daemon, 'ns': False}
+        )
+    daemonThread.start()
+
+    while True:
+        try:
+            time.sleep(1)
+        except KeyboardInterrupt:
+            break
+
+    daemon.shutdown()
+    daemonThread.join()
+
+
+if __name__ == '__main__':
+    main()
