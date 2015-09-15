@@ -109,7 +109,22 @@ class Camera(object):
 
     def enableCamera(self):
         if not self.connected: self.connect()
+        c = self.context
+        if self.imgRaw:
+            dll.fc2DestroyImage(self.imgRaw)
+        self.imgRaw = Fc2Image()
+        dll.fc2CreateImage(byref(self.imgRaw))
+        dll.fc2StartCapture(c)
         return True
+
+
+    def disableCamera(self):
+        if not self.connected or not self.context:
+            return
+        c = self.context
+        dll.fc2StopCapture(c)
+        dll.fc2DestroyImage(self.imgRaw)
+        return False
 
 
     def grabImageToDisk(self, outFileName='fc2Test.png'):
@@ -134,18 +149,12 @@ class Camera(object):
 
     def grabImageToBuffer(self):
         c = self.context
-        imgRaw = Fc2Image()
-        dll.fc2CreateImage(byref(imgRaw))
-        dll.fc2StartCapture(c)
-        dll.fc2RetrieveBuffer(c, byref(imgRaw))
-        dll.fc2StopCapture(c)
-
+        dll.fc2RetrieveBuffer(c, byref(self.imgRaw))
         # When the DLL assignes to imgRaw.pData, it becomes a long in python.
         # Recast to a pointer to a byte array.
-        p = ctypes.cast(imgRaw.pData, ctypes.POINTER(ctypes.c_ubyte))
-        data = np.fromiter(p, np.uint8, imgRaw.cols * imgRaw.rows)
-        self.lastImage = data.reshape((imgRaw.rows, imgRaw.cols))
-        dll.fc2DestroyImage(byref(imgRaw))
+        p = ctypes.cast(self.imgRaw.pData, ctypes.POINTER(ctypes.c_ubyte))
+        data = np.fromiter(p, np.uint8, self.imgRaw.cols * self.imgRaw.rows)
+        self.lastImage = data.reshape((self.imgRaw.rows, self.imgRaw.cols))
 
 
     def getImageSize(self):
