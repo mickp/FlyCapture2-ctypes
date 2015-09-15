@@ -96,6 +96,16 @@ class Camera(object):
         self.imgRaw = None
 
 
+    def __del__(self):
+        c = self.context
+        if not c:
+            return
+        try:
+            dll.fc2StopCapture(c)
+            dll.fc2DestroyContext(c)
+        except:
+            pass
+
 
     def connect(self, index=0):
         c = self.context
