@@ -92,6 +92,9 @@ class Camera(object):
         self.cameraInfo = Fc2CameraInfo()
         self.connected = False
         self.client = None
+        self.lastImage = None
+        self.imgRaw = None
+
 
 
     def connect(self, index=0):
