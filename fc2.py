@@ -163,11 +163,17 @@ class Camera(object):
     def grabImageToBuffer(self):
         c = self.context
         dll.fc2RetrieveBuffer(c, byref(self.imgRaw))
+        # Convert image to 8-bit grayscale.
+        imgConv = Fc2Image()
+        dll.fc2CreateImage(byref(imgConv))
+        dll.fc2ConvertImageTo(0x80000000, byref(self.imgRaw), byref(imgConv))
         # When the DLL assignes to imgRaw.pData, it becomes a long in python.
         # Recast to a pointer to a byte array.
-        p = ctypes.cast(self.imgRaw.pData, ctypes.POINTER(ctypes.c_ubyte))
-        data = np.fromiter(p, np.uint8, self.imgRaw.cols * self.imgRaw.rows)
-        self.lastImage = data.reshape((self.imgRaw.rows, self.imgRaw.cols))
+        src = imgConv
+        p = ctypes.cast(src.pData, ctypes.POINTER(ctypes.c_ubyte))
+        data = np.fromiter(p, np.uint8, src.cols * src.rows)
+        self.lastImage = data.reshape((src.rows, src.cols))
+        dll.fc2DestroyImage(imgConv)
 
 
     def getImageSize(self):
